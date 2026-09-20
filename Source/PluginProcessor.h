@@ -54,6 +54,12 @@ private:
     // --- Filtro K-weighting simplificado (aprox. BS.1770) para LUFS ---
     struct KWeightingChannel
     {
+        KWeightingChannel() = default;
+        KWeightingChannel (const KWeightingChannel&) = delete;
+        KWeightingChannel& operator= (const KWeightingChannel&) = delete;
+        KWeightingChannel (KWeightingChannel&&) = default;
+        KWeightingChannel& operator= (KWeightingChannel&&) = default;
+
         juce::dsp::IIR::Filter<float> highShelf, highPass;
         void reset() { highShelf.reset(); highPass.reset(); }
     };
