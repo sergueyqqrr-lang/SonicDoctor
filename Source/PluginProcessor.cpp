@@ -34,7 +34,8 @@ void SonicDoctorAudioProcessor::prepareToPlay (double sampleRate, int samplesPer
     currentSampleRate = sampleRate;
 
     auto numChannels = juce::jmax (1, getTotalNumOutputChannels());
-    kWeighting.assign ((size_t) numChannels, KWeightingChannel());
+    kWeighting.clear();
+    kWeighting.resize ((size_t) numChannels);
     for (auto& kw : kWeighting)
     {
         // Aproximación del pre-filtro K-weighting de BS.1770: shelf en agudos + HPF en subgraves.
@@ -169,9 +170,15 @@ void SonicDoctorAudioProcessor::processBlock (juce::AudioBuffer<float>& buffer, 
 
         constexpr float lufsOffset = -0.691f; // offset estándar de BS.1770
         if (momentaryWindowSamples > 0)
-            currentProfile.momentaryLufs = 10.0f * std::log10 (juce::jmax (1.0e-10, runningMeanSquare400ms / momentaryWindowSamples)) + lufsOffset;
+        {
+            auto meanSquare = juce::jmax (1.0e-10, runningMeanSquare400ms / momentaryWindowSamples);
+            currentProfile.momentaryLufs = (float) (10.0 * std::log10 (meanSquare) + (double) lufsOffset);
+        }
         if (shortTermWindowSamples > 0)
-            currentProfile.shortTermLufs = 10.0f * std::log10 (juce::jmax (1.0e-10, runningMeanSquare3s / shortTermWindowSamples)) + lufsOffset;
+        {
+            auto meanSquare = juce::jmax (1.0e-10, runningMeanSquare3s / shortTermWindowSamples);
+            currentProfile.shortTermLufs = (float) (10.0 * std::log10 (meanSquare) + (double) lufsOffset);
+        }
 
         if (correlationSampleCount > 0 && sumL > 0.0 && sumR > 0.0)
             currentProfile.phaseCorrelation = (float) (sumLR / std::sqrt (sumL * sumR));
