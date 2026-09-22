@@ -254,7 +254,7 @@ void CaptureBar::paint (juce::Graphics& g)
     }
     else if (proc.hasCapturedData())
     {
-        status = juce::String (juce::CharPointer_UTF8 ("Captura fija disponible (ver pesta\xc3\xb1as)"));
+        status = juce::String (juce::CharPointer_UTF8 ("Captura fija disponible (ver pesta\xc3\xb1" "as)"));
         statusColour = Palette::orange;
     }
     else
