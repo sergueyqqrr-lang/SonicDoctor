@@ -56,6 +56,10 @@ void SonicDoctorAudioProcessor::prepareToPlay (double sampleRate, int samplesPer
     runningMeanSquare3s = 0.0;
 
     peakHold = 0.0f;
+    // Release del medidor de picos: ~60dB en 2 segundos, calculado correctamente
+    // POR MUESTRA (independiente del tamaño de bloque del host).
+    constexpr double peakReleaseSeconds = 2.0;
+    peakDecayCoeff = (float) std::pow (10.0, -3.0 / (peakReleaseSeconds * juce::jmax (1.0, sampleRate)));
     rmsEnvelope = 0.0f;
     sumL = sumR = sumLR = 0.0;
     correlationSampleCount = 0;
@@ -84,7 +88,6 @@ void SonicDoctorAudioProcessor::processBlock (juce::AudioBuffer<float>& buffer, 
     const int numChannels = buffer.getNumChannels();
     const int numSamples = buffer.getNumSamples();
 
-    constexpr float peakDecayPerBlock = 0.999f;   // decaimiento suave del pico retenido
     constexpr float rmsAttack = 0.3f, rmsRelease = 0.02f;
 
     const bool isCapturingThisBlock = capturing.load();
@@ -124,7 +127,7 @@ void SonicDoctorAudioProcessor::processBlock (juce::AudioBuffer<float>& buffer, 
             kWeightedSquareSum += weighted * weighted;
 
             // --- Pico ---
-            peakHold = juce::jmax (peakHold * peakDecayPerBlock, std::abs (x));
+            peakHold = juce::jmax (peakHold * peakDecayCoeff, std::abs (x));
 
             // --- DC offset ---
             dcAccumulator += x;
@@ -445,8 +448,30 @@ void SonicDoctorAudioProcessor::analyseSpectrumIntoProfile()
         if (isCapturingNow && ! found.empty())
         {
             juce::ScopedLock lock (captureLock);
+
+            // Fusiona con resonancias ya vistas en frames anteriores si caen dentro
+            // de una tolerancia de frecuencia — si no, la misma resonancia real
+            // (que se detecta en casi todos los frames mientras suena) termina
+            // apareciendo como 3 "hallazgos" distintos en vez de reconocerse como uno.
+            constexpr float freqToleranceHz = 30.0f;
             for (int i = 0; i < snapshot.numResonancesFound; ++i)
-                capResonancesAll.push_back (found[(size_t) i]);
+            {
+                const auto& candidate = found[(size_t) i];
+                bool merged = false;
+                for (auto& existing : capResonancesAll)
+                {
+                    if (std::abs (existing.frequencyHz - candidate.frequencyHz) < freqToleranceHz)
+                    {
+                        if (candidate.prominenceDb > existing.prominenceDb)
+                            existing = candidate;
+                        merged = true;
+                        break;
+                    }
+                }
+                if (! merged)
+                    capResonancesAll.push_back (candidate);
+            }
+
             // Mantenemos la lista acotada: nos quedamos solo con las mejores 10 vistas hasta ahora.
             std::sort (capResonancesAll.begin(), capResonancesAll.end(), [] (const ResonancePeak& a, const ResonancePeak& b)
             {
