@@ -98,6 +98,7 @@ private:
 
     // --- Picos / RMS / crest factor ---
     float peakHold = 0.0f;
+    float peakDecayCoeff = 0.9999f; // se recalcula en prepareToPlay para un release de ~2s/60dB, correctamente por MUESTRA
     float rmsEnvelope = 0.0f;
 
     // --- Correlación de fase ---
